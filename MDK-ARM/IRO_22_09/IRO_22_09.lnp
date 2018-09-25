@@ -1,0 +1,23 @@
+--cpu Cortex-M3
+"iro_22_09\startup_stm32f103xb.o"
+"iro_22_09\main.o"
+"iro_22_09\stm32f1xx_it.o"
+"iro_22_09\stm32f1xx_hal_msp.o"
+"iro_22_09\stm32f1xx_hal_gpio_ex.o"
+"iro_22_09\stm32f1xx_hal_tim.o"
+"iro_22_09\stm32f1xx_hal_tim_ex.o"
+"iro_22_09\stm32f1xx_hal_uart.o"
+"iro_22_09\stm32f1xx_hal.o"
+"iro_22_09\stm32f1xx_hal_rcc.o"
+"iro_22_09\stm32f1xx_hal_rcc_ex.o"
+"iro_22_09\stm32f1xx_hal_gpio.o"
+"iro_22_09\stm32f1xx_hal_dma.o"
+"iro_22_09\stm32f1xx_hal_cortex.o"
+"iro_22_09\stm32f1xx_hal_pwr.o"
+"iro_22_09\stm32f1xx_hal_flash.o"
+"iro_22_09\stm32f1xx_hal_flash_ex.o"
+"iro_22_09\system_stm32f1xx.o"
+--strict --scatter "IRO_22_09\IRO_22_09.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "IRO_22_09.map" -o IRO_22_09\IRO_22_09.axf
