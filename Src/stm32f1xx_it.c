@@ -36,13 +36,7 @@
 #include "stm32f1xx_it.h"
 
 /* USER CODE BEGIN 0 */
-#include "dataType.h"
-#include "DEFINE.h"
 
-extern RX_buffer rxBuffer_t;
-extern uint8_t flag_debug_done;
-extern uint8_t flag_mode;
-extern uint8_t flag_table_done;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -228,48 +222,6 @@ void USART1_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-	if(htim->Instance == htim2.Instance)
-	{
-		HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
-	}
-}
 
-/* ngat nhan chi de doc ban tin du lieu co dinh dang [abcd,efgh,z] => countRX = 12 */
-/* nhan het 1 ban tin thi dung lai khong doc nua */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	if(huart->Instance == huart1.Instance)
-	{
-		if(rxBuffer_t.byteRX == '[') 
-		{
-			rxBuffer_t.countRX = 0;
-			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX;
-			HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
-		}
-
-		else if(rxBuffer_t.byteRX != ']')
-		{
-			rxBuffer_t.countRX++;
-			if(rxBuffer_t.countRX >= 110) rxBuffer_t.countRX = 0;
-			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX;
-			HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
-		}
-
-		else if(rxBuffer_t.byteRX == ']') 
-		{
-			rxBuffer_t.countRX++; 
-			if(rxBuffer_t.countRX >= 110) rxBuffer_t.countRX = 0;
-			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX; 
-			if(flag_mode == DEBUG_MODE && flag_debug_done == NO)				
-			{ 
-				if(rxBuffer_t.arrRX[0] == '[') flag_debug_done = OK; 
-				else HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);  // neu nhan het 1 chuoi ma ky tu dau khong phai '[' thi nhan lai
-			}
-			else if(flag_table_done == NO) flag_table_done = OK; 	  // chi nhan 1 lan ADC table  
-		}
-	}
-}
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

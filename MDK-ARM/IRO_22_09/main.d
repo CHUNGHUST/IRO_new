@@ -29,6 +29,3 @@ iro_22_09\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
 iro_22_09\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 iro_22_09\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 iro_22_09\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
-iro_22_09\main.o: ../Inc/dataType.h
-iro_22_09\main.o: ../Inc/DEFINE.h
-iro_22_09\main.o: ../Inc/dataProcess.h

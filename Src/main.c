@@ -44,10 +44,48 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "dataType.h"
-#include "DEFINE.h"
-#include "dataProcess.h"
 
+#define CLK_SET        HAL_GPIO_WritePin(SPI_CLK_GPIO_Port, SPI_CLK_Pin, GPIO_PIN_SET)
+#define CLK_RESET      HAL_GPIO_WritePin(SPI_CLK_GPIO_Port, SPI_CLK_Pin, GPIO_PIN_RESET)
+ 
+#define SDO_SET        HAL_GPIO_WritePin(SPI_SDO_GPIO_Port, SPI_SDO_Pin, GPIO_PIN_SET)
+#define SDO_RESET		   HAL_GPIO_WritePin(SPI_SDO_GPIO_Port, SPI_SDO_Pin, GPIO_PIN_RESET)
+
+#define CS_TIN_SET     HAL_GPIO_WritePin(SPI_CS_TIN_GPIO_Port, SPI_CS_TIN_Pin, GPIO_PIN_SET)
+#define CS_TIN_RESET   HAL_GPIO_WritePin(SPI_CS_TIN_GPIO_Port, SPI_CS_TIN_Pin, GPIO_PIN_RESET)
+
+#define CS_TOUT_SET    HAL_GPIO_WritePin(SPI_CS_TOUT_GPIO_Port, SPI_CS_TOUT_Pin, GPIO_PIN_SET)
+#define CS_TOUT_RESET  HAL_GPIO_WritePin(SPI_CS_TOUT_GPIO_Port, SPI_CS_TOUT_Pin, GPIO_PIN_RESET)
+
+#define DEBUG_MODE_    HAL_GPIO_ReadPin(DEBUG_BT_GPIO_Port, DEBUG_BT_Pin)
+
+#define READ_TANG      HAL_GPIO_ReadPin(TANG_GPIO_Port, TANG_Pin)
+#define READ_GIAM    	 HAL_GPIO_ReadPin(GIAM_GPIO_Port, GIAM_Pin)
+
+/* chon kenh TDS */
+#define OUT_CHANNEL 1
+#define IN_CHANNEL  0
+
+/* lenh ghi du lieu vao MCP41010 */
+#define WRITE 0x11
+
+#define ON  1
+#define OFF 0
+
+#define NO  0
+#define OK  1
+
+#define EN  1
+#define DIS 0
+
+#define DEBUG_MODE 1
+#define TABLE_MODE 0
+
+#define GET_TABLE_CNO 	HAL_UART_Transmit(&huart1, (uint8_t*)"[ADC_TABLE,1]", 13, 100);
+#define GET_TABLE_CNI 	HAL_UART_Transmit(&huart1, (uint8_t*)"[ADC_TABLE,0]", 13, 100);
+
+#define DEBUG_ON				HAL_UART_Transmit(&huart1, (uint8_t*)"[DEBUG_EN,1]", 12, 100);
+#define DEBUG_OFF				HAL_UART_Transmit(&huart1, (uint8_t*)"[DEBUG_EN,0]", 12, 100);
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -57,22 +95,32 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+typedef struct
+{
+	uint8_t byteRX;     /* byte nhan ve sau 1 lan ngat */
+	uint8_t arrRX[110]; /* mang du lieu nhan duoc sau khi ket thuc chuoi */
+	int8_t countRX;    /* bien dem so luong byte nhan duoc */
+} RX_buffer;
 
 RX_buffer rxBuffer_t;
 
-RX_TYPE rxTable_t, rxDebug_t;
+typedef struct
+{
+	uint8_t arrLVT[30]; /* mang luu vi tri cac dau '['   ','   ']' */
+	uint8_t countVT;    /* bien dem so luong phan tu cuar arrLVT */	
+	
+	int16_t value[25];
+} RX_TYPE;
 
-MCP mcp1;
+RX_TYPE rxTable_t, rxDebug_t;
 
 uint8_t flag_mode  = TABLE_MODE;
 uint8_t flag_table_done = NO;
 uint8_t flag_debug_mode = OFF;
 uint8_t flag_debug_done = NO;
-
-
-uint8_t save; // luu vi tri gia tri dien tro
-int16_t arrTest[10]; // luu cac gia tri de doi den gia tri UART on dinh
+uint16_t MIN = 0;
+uint8_t save;
+uint16_t valueMCP;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +135,146 @@ static void MX_USART1_UART_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+
+
+/* Rab = 10k, Rw = 73
+ * Raw = Rab*(256-data)/256 + Rw
+ * Rwb = Rab*data/256 + Rw
+ */
+void SPISW_writeData(uint8_t channel, uint8_t datain)
+{
+	/* init bus */
+	CS_TIN_SET;
+	CS_TOUT_SET;
+	CLK_RESET;
+	SDO_RESET;
+	/* count 16 bit : 8bit command and 8bit data */
+	uint8_t cnt;
+	/* 2byte temp = byte com + byte data */
+	uint16_t temp;
+	temp = (WRITE<<8) | datain;
+
+	if(channel == IN_CHANNEL)  CS_TIN_RESET;
+	else 	if(channel == OUT_CHANNEL) CS_TOUT_RESET;
+						
+	/* SPI shift 16bit */
+	for(cnt = 0; cnt < 16; cnt++)
+	{
+		CLK_RESET;
+		(temp & 0x8000) ? SDO_SET : SDO_RESET;
+		CLK_SET;
+		temp <<= 1;
+	}
+	
+	CLK_RESET;
+	CS_TIN_SET;
+	CS_TOUT_SET;
+}
+
+void tachDau(RX_TYPE *RX, RX_buffer *rxBuf)
+{
+	uint8_t *ptrLVT  = RX->arrLVT;
+	uint8_t cnt;
+	uint8_t countVT = 0;
+	
+	uint8_t *ptrBufferRX = rxBuf->arrRX;
+	int8_t countRX = rxBuf->countRX;
+	//count  = RX->countVT;
+	
+//	if(ptrBufferRX[0] == '[')
+//	{
+		//RX->countVT = 0;
+		ptrLVT[countVT] = 0;  /* vi tri dau '[' */
+		for(cnt = 1; cnt < countRX; cnt++)
+		{
+			if(ptrBufferRX[cnt] == ',')
+			{
+				countVT++;
+				ptrLVT[countVT] = cnt;
+			}
+		}
+		countVT++;
+		RX->countVT = countVT;
+		ptrLVT[countVT] = countRX; /* vi tri dau ']' */
+		ptrLVT[countVT+1] = 0xFF; /* thong bao ket thuc mang LVT */
+//	}
+}
+
+/* destination : dich den */
+void tachChuoi(uint8_t *des, uint8_t *src, uint8_t begin, uint8_t length)
+{
+	memcpy(des, (const char*)(src+begin), length);
+	des[length] = '\0';
+}
+
+/* tach tu mang rx buffer cac gia tri luu vao value */
+void tachGiatri(RX_TYPE *RX, RX_buffer *rxBuf)
+{
+	
+	tachDau(RX, rxBuf);
+	
+	uint8_t *ptrLVT = RX->arrLVT;
+	int8_t countVT = RX->countVT;
+	int16_t *ptrValue = RX->value;
+	
+	uint8_t *ptrBufferRX = rxBuf->arrRX;	
+	uint8_t buf[15];
+
+	for(uint8_t cnt = 0; cnt < countVT; cnt++)
+	{
+		tachChuoi(buf, ptrBufferRX, ptrLVT[cnt]+1, ptrLVT[cnt+1] - ptrLVT[cnt] - 1);
+		ptrValue[cnt] = atoi((const char*)buf);
+	}
+}
+void xoaBuffer()
+{
+	for(uint8_t i = 0; i < 110; i++) rxBuffer_t.arrRX[i] = '\0';
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == htim2.Instance)
+	{
+		HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
+	}
+}
+
+/* ngat nhan chi de doc ban tin du lieu co dinh dang [abcd,efgh,z] => countRX = 12 */
+/* nhan het 1 ban tin thi dung lai khong doc nua */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == huart1.Instance)
+	{
+		if(rxBuffer_t.byteRX == '[') 
+		{
+			//xoaBuffer();
+			rxBuffer_t.countRX = 0;
+			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX;
+			HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
+		}
+
+		else if(rxBuffer_t.byteRX != ']')
+		{
+			rxBuffer_t.countRX++;
+			if(rxBuffer_t.countRX >= 110) rxBuffer_t.countRX = 0;
+			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX;
+			HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
+		}
+
+		else if(rxBuffer_t.byteRX == ']') 
+		{
+			rxBuffer_t.countRX++; 
+			if(rxBuffer_t.countRX >= 110) rxBuffer_t.countRX = 0;
+			rxBuffer_t.arrRX[rxBuffer_t.countRX] = rxBuffer_t.byteRX; 
+			if(flag_mode == DEBUG_MODE && flag_debug_done == NO)				
+			{ 
+				if(rxBuffer_t.arrRX[0] == '[') flag_debug_done = OK; 
+				else HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);  // neu nhan het 1 chuoi ma ky tu dau khong phai '[' thi nhan lai
+			}
+			else if(flag_table_done == NO) flag_table_done = OK; 	  // chi nhan 1 lan ADC table  
+		}
+	}
+}
 
 /* USER CODE END 0 */
 
@@ -125,53 +313,34 @@ int main(void)
 	
 	/* cho phep nhan 1 ky tu roi nhay vao ngat */
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
-	
-	// LAY BANG GIA TRI ADC_TABLE KENH IN BAT DAU O DAY
 	GET_TABLE_CNI;
+	
 	flag_mode = TABLE_MODE;
-	while(flag_table_done == NO)        /* cho cho den khi gui ve bang gia tri table ADC 1 lan, led nhay tan so 5Hz, neu nhan xong led nhay voi tan so 10Hz */
+	/* cho cho den khi gui ve bang gia tri table ADC 1 lan, led nhay tan so 5Hz, neu nhan xong led nhay voi tan so 1Hz */
+	while(flag_table_done == NO)
   {
 		HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
 		HAL_Delay(200);
 	}
 	flag_debug_done = NO;
 	tachGiatri(&rxTable_t, &rxBuffer_t);			
-	// KET THUC LAY GIA TRI ADC_TABLE, DU LIEU DUOC LUU VAO MANG rxTable_t.value
-
-	/*
-	 *
-	 */
 	
-	// BAT DAU LAY DU LIEU DEBUG O DAY, BO QUA DU LIEU XAC NHAN TRA VE lAN DAU
+	//flag_debug_mode = EN;
+	
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
 	flag_mode = DEBUG_MODE;
-	DEBUG_ON;        									 /* gui lenh nhan gia tri debug */
-	while(flag_table_done == NO)
+	DEBUG_ON;          // gui lenh nhan gia tri debug
+	while(flag_debug_done == NO)
   {
 		HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
 		HAL_Delay(100);
 	}  // bo qua chuoi trang thai debug tra ve [DEBUG_EN,0]
-	flag_debug_done = NO;	
-	// KET THUC NHAN DU LIEU XAC NHAN 
-	
-	/*
-	 *
-	 */			
-	
+	flag_debug_done = NO;					
 	HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
-	mcp1.valueMCP = 1;
-	
-	/* 2 bien tam luu vi tri va gia tri truoc khi gia tri do - gia tri trong bang < 0 */
-	uint8_t temp1;
-	int16_t temp2;
-	
-	/* lay ra 10 gia tri dau de doi cho gia tri on dinh */
-	SPISW_writeData(IN_CHANNEL, mcp1.valueMCP);
-	for(uint8_t x = 0; x < 5; x++)
-	{
-		layGiaTri();
-		arrTest[x] = rxDebug_t.value[IN_CHANNEL];
-	}				
+	//HAL_TIM_Base_Start_IT(&htim2);
+//	while(flag_debug_done == NO)   // doc ve gia tri 2 kenh IN, OUT lan dau [xxxx,yyyy]
+//	flag_debug_done = NO;				
+//	tachGiatri(&rxDebug_t, &rxBuffer_t);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -181,46 +350,33 @@ int main(void)
 
   /* USER CODE END WHILE */
 
-  /* USER CODE BEGIN 3 */	
-		for(save = 2; save < rxTable_t.countVT; save++)																												/* cai tung gia tri dien tro roi doc ve gia tri ADC, so sanh neu bam sat gia tri luu trong bang ADC_TABLE thi dung */
-		{
-			if(rxTable_t.value[save] < rxDebug_t.value[IN_CHANNEL])
-			{
-				for(mcp1.valueMCP = mcp1.valueMCP; mcp1.valueMCP < 256; mcp1.valueMCP++)
-				{
-					SPISW_writeData(IN_CHANNEL, mcp1.valueMCP);
-					layGiaTri();
-					if((rxDebug_t.value[IN_CHANNEL] - rxTable_t.value[save]) < 0) 																							/* so sanh gia tri nhan ve va gia tri trong bang */
-					{
-						if((rxTable_t.value[save] - rxDebug_t.value[IN_CHANNEL]) < (temp1 - rxTable_t.value[save]))
-						{
-							mcp1.arrVMCP[save] = 	mcp1.valueMCP;
-							mcp1.arrValueCom[save] = rxDebug_t.value[IN_CHANNEL];
-						}
-						
-						else
-						{
-							mcp1.arrVMCP[save] = 	temp1;
-							mcp1.arrValueCom[save] = temp2;
-						}
-						break;
-					}
-					
-					else
-					{
-						temp1 = mcp1.valueMCP;
-						temp2 = rxDebug_t.value[0];
-					}
-				}
-			}
-		}
-
-		/* sau khi set xong gia tri thi vao vonf lap nhay led tan so 1Hz */
-		while(1)
-		{
-				HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
-				HAL_Delay(1000);
-		}
+  /* USER CODE BEGIN 3 */
+		
+		/* lay bang gia tri 1 lan */
+			
+		/* cai tung gia tri dien tro roi doc ve gia tri ADC, so sanh neu bam sat gia tri luu trong bang ADC_TABLE thi dung */
+//		for(valueMCP = 0; valueMCP < 256; valueMCP++)
+//		{
+//			SPISW_writeData(IN_CHANNEL, valueMCP);
+//			xoaBuffer();
+//			HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);				
+//			while(flag_debug_done == NO)
+//			{
+//				HAL_GPIO_TogglePin(led1_GPIO_Port, led1_Pin);
+//				HAL_Delay(1000);
+//			}
+//			flag_debug_done = NO;							
+//			tachGiatri(&rxDebug_t, &rxBuffer_t);					
+//			if(abs(rxDebug_t.value[0] - rxTable_t.value[7]) <= 2) break;
+//		}
+//		
+//		while(1)
+//		{
+//		}
+		xoaBuffer();
+		HAL_UART_Receive(&huart1, (uint8_t*)rxBuffer_t.arrRX, 15, 100);
+	  //HAL_Delay(1000);
+		//HAL_UART_Receive_IT(&huart1, (uint8_t*)&rxBuffer_t.byteRX, 1);
 	}
   /* USER CODE END 3 */
 }

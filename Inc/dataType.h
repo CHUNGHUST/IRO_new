@@ -25,5 +25,5 @@ typedef struct
 	int16_t arrValueCom[25];
 } MCP;
 
-
+//
 #endif

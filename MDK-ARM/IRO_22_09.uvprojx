@@ -406,21 +406,6 @@
               <FileType>1</FileType>
               <FilePath>../Src/stm32f1xx_hal_msp.c</FilePath>
             </File>
-            <File>
-              <FileName>dataProcess.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Src\dataProcess.c</FilePath>
-            </File>
-            <File>
-              <FileName>dataType.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Inc\dataType.h</FilePath>
-            </File>
-            <File>
-              <FileName>DEFINE.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Inc\DEFINE.h</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
