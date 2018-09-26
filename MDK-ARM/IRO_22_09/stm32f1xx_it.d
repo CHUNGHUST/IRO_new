@@ -27,3 +27,5 @@ iro_22_09\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.
 iro_22_09\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 iro_22_09\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
 iro_22_09\stm32f1xx_it.o: ../Inc/stm32f1xx_it.h
+iro_22_09\stm32f1xx_it.o: ../Inc/dataType.h
+iro_22_09\stm32f1xx_it.o: ../Inc/DEFINE.h
